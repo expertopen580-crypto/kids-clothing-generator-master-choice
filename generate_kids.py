@@ -6,9 +6,10 @@ import base64
 from datetime import datetime
 from openai import OpenAI
 
+# Initialize OpenAI Client (reads OPENAI_API_KEY from GitHub Secrets automatically)
 client = OpenAI()
 
-TOTAL_IMAGES = 5  # Change to 20 when ready
+TOTAL_IMAGES = 5  # Keep at 5 for testing; change to 20 when ready
 AGES = ["2-3 years", "3-4 years", "4-5 years", "5-6 years", "6-7 years"]
 GENDERS = ["boy", "girl"]
 SHIRT_COLORS = ["Crisp White", "Pastel Blue", "Mint Green", "Soft Yellow", "Beige"]
@@ -18,6 +19,8 @@ def run_daily_automation():
     today_str = datetime.now().strftime('%Y-%m-%d')
     output_dir = f"./output_{today_str}"
     images_dir = os.path.join(output_dir, "images")
+    
+    # Create output directory and separate images subfolder
     os.makedirs(images_dir, exist_ok=True)
     
     csv_file_path = os.path.join(output_dir, f"catalog_{today_str}.csv")
@@ -27,7 +30,7 @@ def run_daily_automation():
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
         
-        print(f"Starting generation of {TOTAL_IMAGES} items using OpenAI response tools...")
+        print(f"Starting generation of {TOTAL_IMAGES} items using Responses API...")
         
         for i in range(1, TOTAL_IMAGES + 1):
             age = random.choice(AGES)
@@ -48,35 +51,41 @@ def run_daily_automation():
                 f"Natural soft sunlight, high definition, 8k resolution."
             )
             
-            print(f"-> Generating image {i} via API call...")
+            print(f"-> Requesting image {i} via responses API...")
             
             try:
                 response = client.responses.create(
                     model="gpt-6-astra",
                     input=prompt,
                     tools=[
-                        {"type": "image_generation", "model": "gpt-image-2.5-sunburst", "action": "generate"}
+                        {
+                            "type": "image_generation", 
+                            "model": "gpt-image-2.5-sunburst", 
+                            "action": "generate",
+                            "size": "1024x1024"
+                        }
                     ]
                 )
                 
-                # Extract base64 image results from the response output
-                image_data = [
-                    output.result
-                    for output in response.output
-                    if output.type == "image_generation_call"
-                ]
+                # Safely parse image outputs from response object
+                image_base64 = None
+                if hasattr(response, "output") and response.output:
+                    for output in response.output:
+                        if getattr(output, "type", None) == "image_generation_call":
+                            image_base64 = getattr(output, "result", None)
+                            break
                 
-                if image_data:
-                    image_base64 = image_data[0]
+                if image_base64:
                     with open(image_path, "wb") as f:
                         f.write(base64.b64decode(image_base64))
-                    print(f"-> SUCCESS: Saved {image_filename} into images/")
+                    print(f"-> SUCCESS: Saved {image_filename} into images/ folder")
                 else:
-                    print(f"-> WARNING: No image data returned for item {i}")
+                    print(f"-> WARNING: Response did not contain image generation data for item {i}")
                     
             except Exception as e:
-                print(f"-> ERROR on item {i}: {str(e)}")
+                print(f"-> ERROR during generation of item {i}: {str(e)}")
             
+            # Write item details to the CSV table pointing to the separate images folder
             writer.writerow({
                 "Image Name": f"images/{image_filename}",
                 "Age Group": age,
@@ -92,7 +101,7 @@ def run_daily_automation():
             
             time.sleep(2)
             
-    print(f"Batch generation completed! Catalog stored in {output_dir}")
+    print(f"Batch generation completed successfully! Files stored in {output_dir}")
 
 if __name__ == "__main__":
     run_daily_automation()
