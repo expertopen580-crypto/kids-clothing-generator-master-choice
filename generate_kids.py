@@ -6,11 +6,11 @@ from datetime import datetime
 import urllib.parse
 import requests
 
-TOTAL_IMAGES = 20
+TOTAL_IMAGES = 5  # Keep at 5 for quick debugging
 AGES = ["2-3 years", "3-4 years", "4-5 years", "5-6 years", "6-7 years"]
 GENDERS = ["boy", "girl"]
-SHIRT_COLORS = ["Crisp White", "Pastel Blue", "Mint Green", "Soft Yellow", "Beige", "Lavender", "Coral Pink"]
-SLEEVE_COLORS = ["Contrasting Blue", "Matching Linen", "Dark Grey", "Beige", "White"]
+SHIRT_COLORS = ["Crisp White", "Pastel Blue", "Mint Green", "Soft Yellow", "Beige"]
+SLEEVE_COLORS = ["Contrasting Blue", "Matching Linen", "Dark Grey", "Beige"]
 
 def run_daily_automation():
     today_str = datetime.now().strftime('%Y-%m-%d')
@@ -38,7 +38,6 @@ def run_daily_automation():
             product_name = f"Kids Pure Linen Mandarin Collar Half-Sleeve Shirt ({age}, {shirt_color})"
             description = f"Keep your little one cool and stylish with this premium 100% pure linen shirt. Designed with a modern Mandarin collar and breathable half-sleeve style, featuring a {shirt_color} body and {sleeve_color} sleeve combination."
             
-            # Prompt matching your reference style
             prompt_text = (
                 f"Outdoor lifestyle photography of a happy smiling {age} {gender} walking in a garden. "
                 f"Wearing a 100% pure linen half-sleeve shirt with a Mandarin collar. "
@@ -49,24 +48,22 @@ def run_daily_automation():
             encoded_prompt = urllib.parse.quote(prompt_text)
             api_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=600&height=800&nologo=true"
             
-            print(f"-> Generating image {i}/{TOTAL_IMAGES}...")
+            print(f"-> Requesting image {i} from API...")
             
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            response = requests.get(api_url, headers=headers, timeout=60)
             
-            # Attempt to download the image from the free API
-            try:
-                response = requests.get(api_url, headers=headers, timeout=60)
-                
-                if response.status_code == 200 and len(response.content) > 2000:
-                    with open(image_path, 'wb') as img_file:
-                        img_file.write(response.content)
-                    print(f"-> SUCCESS: Saved {image_name}")
-                else:
-                    print(f"-> WARNING: Image {i} failed (Status: {response.status_code}). Skipping file creation.")
-            except Exception as e:
-                print(f"-> ERROR downloading image {i}: {str(e)}")
+            # Print exact status for debugging
+            print(f"-> API Response Status Code for Image {i}: {response.status_code}")
             
-            # Write data row to CSV
+            if response.status_code == 200 and len(response.content) > 1000:
+                with open(image_path, 'wb') as img_file:
+                    img_file.write(response.content)
+                print(f"-> SUCCESS: Saved {image_name}")
+            else:
+                # This will make the GitHub Action turn red and show us the exact error response text
+                raise RuntimeError(f"API Blocked or Failed! Status: {response.status_code}, Content: {response.text[:300]}-")
+            
             writer.writerow({
                 "Image Name": image_name,
                 "Age Group": age,
@@ -80,7 +77,6 @@ def run_daily_automation():
                 "Catalog Description": description
             })
             
-            # Brief pause between requests to prevent server timeouts
             time.sleep(3)
             
     print(f"Batch completed successfully! Files saved in {output_dir}")
