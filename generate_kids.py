@@ -2,17 +2,10 @@ import os
 import random
 import csv
 from datetime import datetime
+import urllib.parse
 import requests
-from openai import OpenAI
 
-# Initialize OpenAI Client using GitHub Secret
-api_key = os.environ.get("OPENAI_API_KEY")
-if not api_key:
-    raise ValueError("CRITICAL: OPENAI_API_KEY is missing from GitHub Secrets!")
-
-client = OpenAI(api_key=api_key)
-
-TOTAL_IMAGES = 5  # Set to 5 for quick testing; change to 20 when ready
+TOTAL_IMAGES = 5  # Change to 20 when ready
 AGES = ["2-3 years", "3-4 years", "4-5 years", "5-6 years", "6-7 years"]
 GENDERS = ["boy", "girl"]
 SHIRT_COLORS = ["Crisp White", "Pastel Blue", "Mint Green", "Soft Yellow", "Beige"]
@@ -30,7 +23,7 @@ def run_daily_automation():
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
         
-        print(f"Starting generation of {TOTAL_IMAGES} items...")
+        print(f"Starting free generation of {TOTAL_IMAGES} items...")
         
         for i in range(1, TOTAL_IMAGES + 1):
             age = random.choice(AGES)
@@ -44,31 +37,31 @@ def run_daily_automation():
             product_name = f"Kids Pure Linen Mandarin Collar Half-Sleeve Shirt ({age}, {shirt_color})"
             description = f"Keep your little one cool and stylish with this premium 100% pure linen shirt. Designed with a modern Mandarin collar and breathable half-sleeve style, featuring a {shirt_color} body and {sleeve_color} sleeve combination."
             
-            # Prompt meticulously structured to match the outdoor lifestyle look of your reference image
-            prompt = (
-                f"Authentic outdoor lifestyle photography of a happy smiling {age} {gender} walking in a lush green garden. "
-                f"The child is wearing a premium 100% pure linen half-sleeve shirt with a modern Mandarin collar. "
-                f"The main shirt body is {shirt_color} with contrasting {sleeve_color} half sleeves. "
-                f"Natural soft sunlight, realistic skin textures, high definition, sharp focus, fashion catalog look, 8k resolution."
+            # Craft the prompt
+            prompt_text = (
+                f"Outdoor lifestyle photography of a happy smiling {age} {gender} walking in a garden. "
+                f"Wearing a 100% pure linen half-sleeve shirt with a Mandarin collar. "
+                f"Main shirt body is {shirt_color} with contrasting {sleeve_color} half sleeves. "
+                f"Natural soft sunlight, high definition, 8k resolution."
             )
             
-            print(f"-> Generating image {i}: {prompt}")
+            # Encode prompt for URL usage
+            encoded_prompt = urllib.parse.quote(prompt_text)
             
-            # Remove try/except temporarily so if it fails, GitHub Actions will show the exact red error log
-            response = client.images.generate(
-                model="dall-e-3",
-                prompt=prompt,
-                size="1024x1024",
-                quality="standard",
-                n=1
-            )
+            # Free Pollinations API Endpoint (Width and Height parameters included)
+            api_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=600&height=800&nologo=true"
             
-            image_url = response.data[0].url
-            image_data = requests.get(image_url).content
-            with open(image_path, 'wb') as img_file:
-                img_file.write(image_data)
+            print(f"-> Requesting free image {i} from Pollinations API...")
             
-            print(f"-> SUCCESS: Downloaded and saved {image_name}")
+            # Fetch the image directly via HTTP GET (No API Key Required)
+            response = requests.get(api_url)
+            
+            if response.status_code == 200:
+                with open(image_path, 'wb') as img_file:
+                    img_file.write(response.content)
+                print(f"-> SUCCESS: Saved {image_name}")
+            else:
+                print(f"-> FAILED: Could not fetch image {i} (Status code: {response.status_code})")
             
             writer.writerow({
                 "Image Name": image_name,
