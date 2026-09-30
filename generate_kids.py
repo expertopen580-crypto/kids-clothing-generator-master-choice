@@ -5,14 +5,18 @@ from datetime import datetime
 import requests
 from openai import OpenAI
 
-# Initialize OpenAI Client (reads OPENAI_API_KEY from GitHub Secrets automatically)
-client = OpenAI()
+# Explicitly check if the API key is being loaded
+api_key = os.environ.get("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("CRITICAL: OPENAI_API_KEY environment variable is missing or not passed to GitHub Secrets!")
 
-TOTAL_IMAGES = 20
+client = OpenAI(api_key=api_key)
+
+TOTAL_IMAGES = 5  # Reduced to 5 temporarily for quick testing to avoid timeouts/rate limits
 AGES = ["2-3 years", "3-4 years", "4-5 years", "5-6 years", "6-7 years"]
 GENDERS = ["boy", "girl"]
-SHIRT_COLORS = ["Pastel Blue", "Mint Green", "Soft Yellow", "Coral Pink", "Lavender", "Beige", "Navy Blue", "Crisp White", "Charcoal Grey", "Peach"]
-SLEEVE_COLORS = ["Contrasting White", "Matching Linen", "Dark Grey", "Navy Blue", "Beige"]
+SHIRT_COLORS = ["Pastel Blue", "Mint Green", "Soft Yellow", "Coral Pink", "Lavender"]
+SLEEVE_COLORS = ["Contrasting White", "Matching Linen", "Dark Grey"]
 
 def run_daily_automation():
     today_str = datetime.now().strftime('%Y-%m-%d')
@@ -26,7 +30,7 @@ def run_daily_automation():
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
         writer.writeheader()
         
-        print(f"Starting daily generation of {TOTAL_IMAGES} items...")
+        print(f"Starting test generation of {TOTAL_IMAGES} items...")
         
         for i in range(1, TOTAL_IMAGES + 1):
             age = random.choice(AGES)
@@ -38,35 +42,31 @@ def run_daily_automation():
             image_path = os.path.join(output_dir, image_name)
             
             product_name = f"Kids Pure Linen Mandarin Collar Half-Sleeve Shirt ({age}, {shirt_color})"
-            description = f"Keep your little one cool and stylish with this premium 100% pure linen shirt. Designed with a modern Mandarin collar and breathable half-sleeve style, featuring a unique {shirt_color} body and {sleeve_color} sleeve combination."
+            description = f"Keep your little one cool and stylish with this premium 100% pure linen shirt. Designed with a modern Mandarin collar and breathable half-sleeve style."
             
             prompt = f"A high-definition studio fashion catalog photo of a cute {age} {gender} wearing a 100% pure linen half-sleeve shirt with a Mandarin collar. Main shirt color is {shirt_color} with {sleeve_color} half sleeves. Clean studio lighting, 8k resolution, minimalist background."
             
-            print(f"Generating image {i}/{TOTAL_IMAGES}: {prompt}")
+            print(f"-> Attempting to generate image {i}: {prompt}")
             
             try:
-                # Call OpenAI Image Generation API (supports DALL-E 3 / gpt-image models)
                 response = client.images.generate(
                     model="dall-e-3",
                     prompt=prompt,
-                    size="1024x1024", # OpenAI standard size; you can resize later if strict 600x800 is required
+                    size="1024x1024",
                     quality="standard",
                     n=1
                 )
                 
                 image_url = response.data[0].url
-                
-                # Download and save the binary image file locally
                 image_data = requests.get(image_url).content
                 with open(image_path, 'wb') as img_file:
                     img_file.write(image_data)
                 
-                print(f"Successfully saved {image_name}")
+                print(f"-> SUCCESS: Saved {image_name}")
                 
             except Exception as e:
-                print(f"Error generating image {i}: {e}")
+                print(f"-> FAILED TO GENERATE IMAGE {i}. Error details: {str(e)}")
             
-            # Write metadata row into the CSV table
             writer.writerow({
                 "Image Name": image_name,
                 "Age Group": age,
@@ -80,7 +80,7 @@ def run_daily_automation():
                 "Catalog Description": description
             })
             
-    print(f"Batch generation completed successfully! CSV table created at {csv_file_path}")
+    print(f"Batch completed. CSV table saved at {csv_file_path}")
 
 if __name__ == "__main__":
     run_daily_automation()
